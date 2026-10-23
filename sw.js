@@ -1,5 +1,5 @@
 // 앱을 고칠 때마다 VERSION 숫자를 올리면 폰에 저장된 옛 파일이 정리돼요.
-const VERSION = 'golf-v19';
+const VERSION = 'golf-v20';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {

@@ -1,6 +1,6 @@
 {
-  "name": "골프 내기 정산기",
-  "short_name": "골프내기",
+  "name": "Golf-Bet",
+  "short_name": "Golf-Bet",
   "description": "타당 내기와 홀당 내기를 정산하는 골프 스코어 앱",
   "lang": "ko",
   "start_url": "./",

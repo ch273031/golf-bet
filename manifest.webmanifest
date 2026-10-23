@@ -1,0 +1,16 @@
+{
+  "name": "골프 내기 정산기",
+  "short_name": "골프내기",
+  "description": "타당 내기와 홀당 내기를 정산하는 골프 스코어 앱",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#17b25d",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

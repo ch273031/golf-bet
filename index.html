@@ -515,6 +515,8 @@ header{position:relative;padding-top:34px}
       <div>
         <h2>추가 규칙</h2>
         <label class="check"><input type="checkbox" id="sTtang"> 땅 사용 (지고 있는 사람이 외치면 그 홀 배판)</label>
+        <label class="check" id="multiWrap" style="margin-top:8px"><input type="checkbox" id="sMulti"> 다인원 동타 배판 (4~5명은 3명 이상 동타, 3명은 가상 1명 포함 3명 동타면 다음 홀 배판)</label>
+        <label class="f" id="vtWrap" style="margin-top:8px;max-width:240px">3명 경기 가상 1명 스코어<select id="sVt"><option value="0">파</option><option value="1">보기</option><option value="2">더블</option></select></label>
       </div>
     </div>
     <div class="gamebox" id="hbBlock" hidden>
@@ -578,8 +580,8 @@ header{position:relative;padding-top:34px}
       <p class="msg" id="shareMsg"></p>
       <textarea id="shareTxt" readonly hidden rows="8" style="width:100%;margin-top:8px;font:inherit;font-size:.85rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px"></textarea>
       <div class="nav" id="shareBtns" hidden>
-        <button class="btn primary" type="button" id="goShare">공유 · 사진 저장</button>
-        <button class="btn" type="button" id="goDl">파일로 저장</button>
+        <button class="btn primary" type="button" id="goShare">사진 공유</button>
+        <button class="btn" type="button" id="goDl">사진 저장</button>
       </div>
       <img id="shareImg" alt="결과 요약 이미지 미리보기" hidden style="width:100%;max-width:360px;display:block;margin:10px auto 0;border-radius:8px;border:1px solid var(--line)">
     </section>
@@ -647,6 +649,15 @@ function holeScores(h){return S.scores[h].slice(0,S.n);}
 function complete(h){return h>=0&&holeScores(h).every(v=>v!=null);}
 function capped(h){const p=S.pars[h];return holeScores(h).map(v=>Math.min(v,2*p));}
 function allTied(h){const c=capped(h);return c.every(v=>v===c[0]);}
+// 다음 홀 배판이 되는 동타: 2명=전원 동타 / 3명=전원 동타 또는 실제 2명 이상 보기(가상 1명은 항상 보기) / 4~5명=같은 스코어 3명 이상
+function tieTrigger(h){
+  if(!complete(h))return '';
+  const n=S.n,c=capped(h),raw=holeScores(h),p=S.pars[h];
+  if(n<=2||S.multiTie===false)return allTied(h)?'직전 홀 전원 동타':'';
+  if(n===3){if(allTied(h))return '직전 홀 3명 동타';const vt=S.vt??1,vn=['파','보기','더블'][vt];return raw.filter(v=>v===p+vt).length>=2?`직전 홀 ${vn} 2명+가상 ${vn}`:'';}
+  const m={};c.forEach(v=>m[v]=(m[v]||0)+1);const mx=Math.max(...Object.values(m));
+  return mx>=3?`직전 홀 ${mx}명 동타`:'';
+}
 function holeInfo(h){
   const n=S.n,p=S.pars[h],net=new Array(n).fill(0);
   if(!complete(h))return {done:false,mult:1,reasons:[],net,near:null};
@@ -654,7 +665,7 @@ function holeInfo(h){
   const raw=holeScores(h),c=capped(h),reasons=[];
   if(raw.some(v=>v<=p-1))reasons.push('버디');
   if(raw.some(v=>v>=p+3))reasons.push('트리플 이상');
-  if(h>0&&complete(h-1)&&allTied(h-1))reasons.push('직전 홀 동타');
+  if(h>0){const tt=tieTrigger(h-1);if(tt)reasons.push(tt);}
   if(S.ttang&&S.calls[h]!=null&&S.calls[h]<n)reasons.push('땅('+S.names[S.calls[h]]+')');
   const mult=reasons.length?2:1,R=S.rate;
   for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){const a=(c[j]-c[i])*R*mult;net[i]+=a;net[j]-=a;}
@@ -752,7 +763,7 @@ window.__holeCalc={segResult,segList,alloc,holeGameTotals,setState:o=>{S=o;}};
 function makeD(fromPlay){
   const h=JSON.parse(JSON.stringify(S.h||defaultH()));
   return {game:S.game||'tadang',rate:S.game==='hole'?50000:(S.rate||50000),unit:S.game==='hole'?'Rp':(S.unit||'Rp'),n:S.n||4,
-    names:(S.example?['A','B','C','D','E']:S.names.slice()),ttang:S.ttang!==false,fromPlay,course:S.example?'':(S.course||''),
+    names:(S.example?['A','B','C','D','E']:S.names.slice()),ttang:S.ttang!==false,multi:S.multiTie!==false,vt:(S.vt??1),fromPlay,course:S.example?'':(S.course||''),
     nines:(!S.example&&S.nines)?JSON.parse(JSON.stringify(S.nines)):defNines(),first:0,second:1,
     sel:'',save:false,showReview:!S.example&&!!S.course,h};
 }
@@ -793,7 +804,7 @@ function renderSetup(){
   $('sNames').innerHTML=Array.from({length:D.n},(_,k)=>`<label class="f">플레이어 ${k+1}<input type="text" id="sn${k}" maxlength="10" value="${esc(D.names[k]||'')}" placeholder="${'ABCDE'[k]}"></label>`).join('');
   for(let k=0;k<D.n;k++)$('sn'+k).oninput=e=>{D.names[k]=e.target.value;if(D.game==='hole'){const lb=$('hcList').children[k];if(lb)lb.firstElementChild.textContent=e.target.value.trim()||'ABCDE'[k];}};
   if(keep&&$(keep))$(keep).focus();
-  $('sTtang').checked=D.ttang;
+  $('sTtang').checked=D.ttang;$('sMulti').checked=D.multi!==false;$('sVt').value=String(D.vt??1);$('multiWrap').hidden=D.n<3;$('vtWrap').hidden=D.n!==3||D.multi===false;
   renderCourse();
   $('sGame').value=D.game;
   $('tdBlock').hidden=D.game!=='tadang';$('hbBlock').hidden=D.game!=='hole';
@@ -853,6 +864,8 @@ $('sRateSel').onchange=e=>{if(e.target.value===''){$('sRate').focus();return;}D.
 $('sUnitSel').onchange=e=>{if(e.target.value===''){$('sUnit').focus();return;}const u=e.target.value;if(u!==D.unit){D.unit=u;const l=UNITS[u];if(!l.includes(D.rate))D.rate=l[u==='Rp'?3:3];}renderSetup();};
 $('sRate').oninput=e=>{D.rate=Math.max(0,+e.target.value||0);renderSetup();};
 $('sTtang').onchange=e=>{D.ttang=e.target.checked;};
+$('sMulti').onchange=e=>{D.multi=e.target.checked;$('vtWrap').hidden=D.n!==3||!D.multi;};
+$('sVt').onchange=e=>{D.vt=+e.target.value;};
 $('sUnit').oninput=e=>{D.unit=e.target.value.trim()||'Rp';renderSetup();};
 $('startBtn').onclick=()=>{
   const names=Array.from({length:5},(_,k)=>(D.names[k]||'').trim()||'ABCDE'[k]);
@@ -860,7 +873,7 @@ $('startBtn').onclick=()=>{
   const A=D.nines[D.first],B=D.nines[D.second];
   const P=A.pars.concat(B.pars),HC=A.hcp.concat(B.hcp),HL=buildHl(D.nines,D.first,D.second);
   const isH=D.game!=='tadang';
-  S={phase:'play',game:D.game,h:JSON.parse(JSON.stringify(D.h)),n:D.n,names,rate:D.rate,unit:isH?D.h.unit:D.unit,pars:P,hcp:HC,hl:HL,nn:[A.name,B.name],nines:JSON.parse(JSON.stringify(D.nines)),course:cname,date:today(),scores:blank(),cur:0,example:false,ttang:isH?false:D.ttang,calls:Array(18).fill(null),near:Array(18).fill(null),off:Array.from({length:18},()=>[false,false,false,false,false])};
+  S={phase:'play',game:D.game,h:JSON.parse(JSON.stringify(D.h)),n:D.n,names,rate:D.rate,unit:isH?D.h.unit:D.unit,pars:P,hcp:HC,hl:HL,nn:[A.name,B.name],nines:JSON.parse(JSON.stringify(D.nines)),course:cname,date:today(),scores:blank(),cur:0,example:false,ttang:isH?false:D.ttang,multiTie:D.multi!==false,vt:(D.vt??1),calls:Array(18).fill(null),near:Array(18).fill(null),off:Array.from({length:18},()=>[false,false,false,false,false])};
   D=null;UI_SETUP=false;save();render();window.scrollTo(0,0);
 };
 $('cancelSetup').onclick=()=>{UI_SETUP=false;S.phase='play';D=null;save();render();};
@@ -1172,14 +1185,14 @@ function shareFile(){
   if(!LAST)return;
   const f=LAST.file;
   if(navigator.canShare&&navigator.canShare({files:[f]})){
-    navigator.share({files:[f],title:'골프 내기 결과'}).then(()=>shareMsg('공유 창을 열었어요. "이미지 저장"을 누르면 사진첩에 들어가요.'))
-      .catch(e=>{if(e&&e.name==='AbortError')shareMsg('공유를 취소했어요.');else shareMsg('공유 창을 열 수 없어요. "파일로 저장"을 누르거나 이미지를 길게 눌러 저장하세요.',true);});
+    navigator.share({files:[f],title:'골프 내기 결과'}).then(()=>shareMsg('공유 창을 열었어요. 보낼 앱을 고르세요.'))
+      .catch(e=>{if(e&&e.name==='AbortError')shareMsg('공유를 취소했어요.');else shareMsg('공유 창을 열 수 없어요. "사진 저장"을 누르거나 이미지를 길게 눌러 저장하세요.',true);});
   } else downloadFile();
 }
 function downloadFile(){
   if(!LAST)return;
   const a=document.createElement('a');a.href=LAST.url;a.download=LAST.file.name;document.body.appendChild(a);a.click();a.remove();
-  shareMsg('파일로 저장했어요. 갤러리의 다운로드 앨범에서 찾을 수 있어요. 안 보이면 이미지를 길게 눌러 저장하세요.');
+  shareMsg('사진을 저장했어요. 갤러리에서 확인하세요. 안 보이면 이미지를 길게 눌러 저장하세요.');
 }
 function summary(){
   const n=S.n,ks=[...Array(n).keys()],nm=k=>S.names[k];
@@ -1292,7 +1305,7 @@ async function makeImage(){
     const fn=`골프결과_${(S.date||today()).replace(/-/g,'')}${S.course?'_'+S.course.replace(/[\\/:*?"<>|\s]+/g,''):''}${SSEL==null?'':'_'+S.names[SSEL].replace(/[\\/:*?"<>|\s]+/g,'')}.png`;
     LAST={file:new File([blob],fn,{type:'image/png'}),url:u};
     $('shareBtns').hidden=false;
-    shareMsg('이미지를 만들었어요. 아래 "공유 · 사진 저장"을 누르세요.');
+    shareMsg('이미지를 만들었어요. 아래 "사진 공유" 또는 "사진 저장"을 누르세요.');
     $('sharePanel').scrollIntoView({behavior:'smooth',block:'start'});
   }catch(e){shareMsg('이미지를 만들지 못했어요. 텍스트 복사를 이용해 주세요.',true);}
   finally{btns.forEach(b=>b.disabled=false);}
@@ -1339,7 +1352,7 @@ function renderHole(){
     const segs=segList().filter(sg=>h>=sg.from&&h<=sg.to).map(sg=>sg.type===18?'18홀':`${sg.type}홀 ${sg.idx+1}구간`);
     html+=`<div class="mult${ev.length?' on':''}">${ev.length?ev.join(', '):(segs.length?'이 홀: '+segs.join(' · '):'')}</div>`;
   } else if(!I.done){
-    const pre=[];if(h>0&&complete(h-1)&&allTied(h-1))pre.push('직전 홀 전원 동타');if(S.ttang&&S.calls[h]!=null)pre.push(S.names[S.calls[h]]+' 땅');
+    const pre=[];if(h>0){const tt=tieTrigger(h-1);if(tt)pre.push(tt);}if(S.ttang&&S.calls[h]!=null)pre.push(S.names[S.calls[h]]+' 땅');
     html+=`<div class="mult${pre.length?' on':''}">${pre.length?pre.join(', ')+' · 이 홀은 배판':'모든 사람 타수를 넣으면 이 홀 금액이 계산돼요'}</div>`;
   } else html+=`<div class="mult${I.mult===2?' on':''}">${I.mult===2?'배판 ×2 · '+I.reasons.join(', '):'일반 홀 ×1'}</div>`;
   if(p===3){
@@ -1491,7 +1504,8 @@ function renderRules(){
     '니어(파3): 니어 주인이 파 이하면 성공, 보기 이상이면 소멸, 온그린 못 한 사람이 파 이하면 지우개로 소멸'
   ]:[
     '홀마다 모든 두 사람끼리 타수 차이 × 1타당 금액을 주고받아요',
-    '배판(2배): 누구든 버디 이상 / 누구든 트리플보기 이상 / 직전 홀 전원 동타. 겹쳐도 최대 2배',
+    '배판(2배): 누구든 버디 이상 / 누구든 트리플보기 이상 / 직전 홀 동타. 겹쳐도 최대 2배',
+    S.multiTie===false?'직전 홀 동타 기준: 전원 동타':`직전 홀 동타 기준: 2명은 전원 동타, 3명은 전원 동타 또는 ${['파','보기','더블'][S.vt??1]} 2명(가상 1명을 ${['파','보기','더블'][S.vt??1]}로 보고 3명 동타), 4~5명은 같은 스코어 3명 이상`,
     ...(S.ttang?['땅: 그 홀 시작 전 누적이 마이너스인 사람이 외치면 그 홀 배판']:[]),
     '니어(파3): 니어 주인이 파 이하면 다른 사람 각자에게서 1타, 배판 홀이면 2타. 보기 이상이면 소멸, 온그린 못 한 사람이 파 이하면 지우개로 소멸',
     '타수는 더블파까지만 계산해요',
